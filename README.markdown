@@ -71,7 +71,7 @@ Example Usage
 =============
 <pre>
 ./open_tree_env.py > open_tree_env.sh
-<tweak open_tree_env.sh for your preferences >
+[tweak open_tree_env.sh for your preferences ]
 source open_tree_env.sh
 python download-dev-resource.py install taxa_allCoL.tre
 python download-dev-resource.py install ncl
