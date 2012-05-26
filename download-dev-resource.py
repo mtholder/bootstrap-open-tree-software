@@ -2,12 +2,12 @@
 '''This is a quick and dirty way to provide developers a way to download
 resources needed to build and test components of the open tree software.
 
-define:
-    OPEN_TREE_DOWNLOAD_DEV_RESOURCE_LOGGING_LEVEL to debug for more info
+environmental variables:
+    OPEN_TREE_DOWNLOAD_DEV_RESOURCE_LOGGING_LEVEL=debug for more info
     
-    OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG or OPEN_TREE_USER_CFG to change the 
+    OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG or OPEN_TREE_USER_SETTINGS_DIR to change the 
         default location for config file that stores local filepaths
-    
+
 '''
 
 _program_name = 'download-dev-resource'
@@ -21,13 +21,17 @@ _program_copyright = 'Copyright (C) 2012 Mark T. Holder.\n' \
                  'This is free software: you are free to change\nand redistribute it. ' \
                  'There is NO WARRANTY,\nto the extent permitted by law.'
 
+from open-tree-env import get_otol_build_env
+
+
 # Global dictionary of resources grouped by 'category' Note that dict is filled
 #   as a side effect of creating an OpenTreeResource
 ALL_RESOURCES = {}
-RESOURCE_CATEGORIES = ['classification']
+RESOURCE_CATEGORIES = {'taxonomy' : 'OPEN_TREE_TAXONOMY_DIR',
+                       'dependency' : 
 for key in RESOURCE_CATEGORIES:
     ALL_RESOURCES[key] = []
-
+SUPPORTED_PROTOCOLS = ['http', 'svn']
 
 
 class OpenTreeResource(object):
@@ -36,8 +40,8 @@ class OpenTreeResource(object):
         `url` - location of the downloadable resource
         `protocol` = http, git, svn
         `compression` - compression protocol (empty or zip)
-        `version` - tuple of 3 integers (major, minor, revision)
-        `category` - name of the type of resource (classification, dependency...)
+        `min_version` - tuple of 3 integers (major, minor, revision)
+        `category` - name of the type of resource (taxonomy, dependency...)
         `compressed_name` - if different from the default for the compression type.
                 should be identical to the file name created
         `description` - string describing the resource
@@ -47,7 +51,7 @@ class OpenTreeResource(object):
                  name,
                  url,
                  protocol='http',
-                 version=(0,0,0),
+                 min_version=(0,0,0),
                  category=None,
                  compression='',
                  compressed_name=None,
@@ -56,7 +60,7 @@ class OpenTreeResource(object):
         self.name = name
         self.url = url
         self.protocol = protocol.lower()
-        if self.protocol not in ['http']:
+        if self.protocol not in SUPPORTED_PROTOCOLS:
             raise ValueError('Protocol ' + protocol + ' unrecognized')
         self.category = category.lower()
         if self.category not in RESOURCE_CATEGORIES:
@@ -88,10 +92,18 @@ class OpenTreeResource(object):
 #  rough stab CoL in newick
 OpenTreeResource(name='taxa_allCoL.tre', 
                  url='https://trello-attachments.s3.amazonaws.com/4fb665cce706648863c3cc90/4fb66a28e706648863c729bf/fxPkDbNwLRGNBnWyNNcAIPFnMpgx/taxa_allCoL.tre.zip',
-                 category='classification',
+                 category='taxonomy',
                  compression='zip',
                  contact='blackrim',
                  description='Newick string representation of Catalogue of Life')
+OpenTreeResource(name='ncl', 
+                 url='https://ncl.svn.sourceforge.net/svnroot/ncl/branches/v2.1',
+                 protocol='svn',
+                 min_version=(2, 1, 18),
+                 category='dependency',
+                 compression='',
+                 contact='mtholder',
+                 description='NEXUS class library (C++ library for parsing phylogenetic data)')
 
 
 
@@ -206,20 +218,13 @@ if __name__ == '__main__':
             dest='config',
             default=None,
             metavar='FILEPATH',
-            help='if specified, this path will be used to local filesystem paths. If not specified, the fallbacks will be $OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG or ${OPEN_TREE_USER_CFG}/download-dev-resource.cfg where ~/.open_tree is the default for ${OPEN_TREE_USER_CFG}')
+            help='if specified, this path will be used to local filesystem paths. If not specified, the fallbacks will be $OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG or ${OPEN_TREE_USER_SETTINGS_DIR}/download-dev-resource.cfg where ~/.open_tree is the default for ${OPEN_TREE_USER_SETTINGS_DIR}')
     (opts, args) = parser.parse_args()
     if len(args) < 1:
         sys.exit('Expecting at least one argument. Use -h for help')
     cfg_path = opts.config
     if not cfg_path:
-        cfg_path = os.environ.get('OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG')
-        if not cfg_path:
-            cfg_path = os.environ.get('OPEN_TREE_USER_CFG')
-            if not cfg_path:
-                def_path = os.path.join('~', '.open_tree', 'download-dev-resource.cfg')
-                cfg_path = os.path.expanduser(def_path)
-            else:
-                cfg_path = os.path.join(cfg_path, 'download-dev-resource.cfg')
+        cfg_path = get_otol_build_env('OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG')
     _LOG.debug('Config path is %s\n' % cfg_path)
 
     command = args[0].lower()
