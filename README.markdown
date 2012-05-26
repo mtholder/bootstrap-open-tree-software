@@ -1,11 +1,11 @@
 bootstrap-open-tree-software
 ============================
-This repo will house scripts and utilities that help developers get a new 
+This repo will house scripts and utilities that help developers get a new
 development machine ready to build and test the software tools associated with
 the Open Tree of Life project.
 
 Each software tool will be fairly self contained, but this repository should
-help with obtaining dependencies and keeping track of links to large artifacts 
+help with obtaining dependencies and keeping track of links to large artifacts
 (e.g. taxonomies) which are not currently under version control.
 
 
@@ -31,8 +31,18 @@ resources.
     <td><pre>${HOME}/open_tree_install</pre></td>
 </tr>
 <tr>
+    <td>OPEN_TREE_BIN_DIR</td>
+    <td>The location of installed Open Tree of Life executables</td>
+    <td><pre>${OPEN_TREE_INSTALL_DIR}/bin</pre></td>
+</tr>
+<tr>
+    <td>OPEN_TREE_LIB_DIR</td>
+    <td>The location of installed Open Tree of Life libraries</td>
+    <td><pre>${OPEN_TREE_INSTALL_DIR}/lib</pre></td>
+</tr>
+<tr>
     <td>OPEN_TREE_PKG_SHARE</td>
-    <td>Default directory to search for taxonomy files</td>
+    <td>Default directory to data related to the package</td>
     <td><pre>${OPEN_TREE_INSTALL_DIR}/share/open-tree-#.#.#</pre></td>
 </tr>
 <tr>
@@ -49,5 +59,10 @@ resources.
     <td>OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG</td>
     <td>Config file that stores the location of local versions of the resources you have downloaded</td>
     <td><pre>${OPEN_TREE_USER_SETTINGS_DIR}/download-dev-resource.cfg</pre></td>
+</tr>
+<tr>
+    <td>OPEN_TREE_BUILD_TAG</td>
+    <td>A simple string (no spaces or shell token breakers) used to tag this build variant</td>
+    <td><pre>release</pre></td>
 </tr>
 </table>

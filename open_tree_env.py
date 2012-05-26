@@ -4,7 +4,7 @@ during build.
 '''
 import os
 _DEF_OPEN_TREE_VERSION = '0.0.1'
-build_env_var_list = ['OPEN_TREE_USER_SETTINGS_DIR', 
+build_env_var_list = ['OPEN_TREE_USER_SETTINGS_DIR',
                       'OPEN_TREE_INSTALL_DIR',
                       'OPEN_TREE_VERSION',
                       'OPEN_TREE_BIN_DIR',
@@ -33,8 +33,6 @@ def get_otol_build_env(var):
     if var == 'OPEN_TREE_LIB_DIR':
         install_dir = get_otol_build_env('OPEN_TREE_INSTALL_DIR')
         return os.path.join(install_dir, 'lib')
-    if var == 'OPEN_TREE_INSTALL_DIR':
-        return os.path.expanduser(os.path.join('~', 'open_tree_install'))
     if var == 'OPEN_TREE_VERSION':
         return _DEF_OPEN_TREE_VERSION
     if var == 'OPEN_TREE_PKG_SHARE':
@@ -52,8 +50,13 @@ def get_otol_build_env(var):
         return os.path.join(p, 'download-dev-resource.cfg')
     if var == 'OPEN_TREE_BUILD_TAG':
         return 'release'
+    return None
 
-    return None    
+def put_otol_build_env_into_env():
+    '''Assures that all of the OPEN_TREE_... variables are in the os.environ.'''
+    for k in build_env_var_list:
+        v = get_otol_build_env(k)
+        os.environ[k] = v
 
 if __name__ == '__main__':
     import sys

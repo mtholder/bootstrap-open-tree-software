@@ -16,7 +16,7 @@ import urllib
 import shutil
 import subprocess
 import zipfile
-from open_tree_env import get_otol_build_env
+from open_tree_env import get_otol_build_env, put_otol_build_env_into_env
 
 _program_name = 'download-dev-resource'
 _program_subtitle = 'OpenTree developer download utility'
@@ -142,9 +142,16 @@ def unzip_file(file, dest_parent):
 ## end of http://code.activestate.com/recipes/252508/ }}}
 
 class RESOURCE_STATUS_CODE:
-    SKIPPED, DOWNLOADED, INSTALLED, MISSING = range(4)
+    SKIPPED, MISSING, DOWNLOADED, INSTALLED = range(4)
 
 
+def system_call(invoc):
+    rc = subprocess.call(invoc)
+    if rc != 0:
+        m = '" "'.join(invoc)
+        d = os.path.abspath(os.curdir)
+        message = 'The command:\n"%s"\nexecuted from %s failed with returncode %d\n' % (m, d, rc)
+        raise RuntimeError(message)
 
 class OpenTreeResource(object):
     '''A bundle of information about a resource. Attributes:
@@ -157,6 +164,11 @@ class OpenTreeResource(object):
         `compressed_name` - if different from the default for the compression type.
                 should be identical to the file name created
         `description` - string describing the resource
+        `install_steps` is a list of dicts. each one has a wd key (working directory)
+                and a list of commands to be run from that directory
+        `install_parent` the parent directory of the installed products
+        `install_sub` a path to be joined to `install_parent` to verify that 
+                the install step worked.
     '''
     UNPACKING_PROTOCOLS = ['', 'zip']
     def __init__(self,
@@ -168,7 +180,10 @@ class OpenTreeResource(object):
                  compression='',
                  compressed_name=None,
                  contact='',
-                 description=''):
+                 description='',
+                 install_steps=None,
+                 install_parent='',
+                 install_sub=''):
         self.name = name
         self.url = url
         self.protocol = protocol.lower()
@@ -192,12 +207,52 @@ class OpenTreeResource(object):
         self.path = None
         self.installed_path = None
         self.status = None
+        self.install_steps = install_steps
+        self.install_parent = install_parent
+        self.install_sub = install_sub
         # here is the hack in which we add resource to the global list
         ALL_RESOURCES[self.category].append(self)
 
     def listing(self, opts):
         return '%s = %s' % (self.name, self.description)
 
+    def do_install(self):
+        if self.status < RESOURCE_STATUS_CODE.DOWNLOADED:
+            self.do_download()
+        if self.install_steps:
+            final_path = os.path.join(os.path.expandvars(self.install_parent), 
+                                      os.path.expandvars(self.install_sub))
+        else:
+            final_path = self.path
+        if os.path.exists(final_path):
+            self.status = RESOURCE_STATUS_CODE.INSTALLED
+            self.installed_path = final_path
+            return
+        cwd = os.path.abspath(os.getcwd())
+        try:
+            
+            parent_var = os.path.expandvars(self.install_parent)
+            if not os.path.exists(parent_var):
+                os.makedirs(parent_var)
+            download_parent = os.path.dirname(os.path.abspath(self.path))
+            os.chdir(self.path)
+            for step_dict in self.install_steps:
+                wd = step_dict.get('wd')
+                if wd is not None:
+                    nwd = os.path.expandvars(wd)
+                    if not os.path.exists(nwd):
+                        os.makedirs(nwd)
+                    os.chdir(nwd)
+                cmd_list = step_dict.get('commands')
+                for cmd in cmd_list:
+                    system_call(cmd)
+        finally:
+            os.chdir(cwd)
+        if not os.path.exists(final_path):
+            raise RuntimeError('Installation steps completed, but installation products were not found at "%s"' % final_path)
+        self.status = RESOURCE_STATUS_CODE.INSTALLED
+        self.installed_path = final_path
+            
     def do_download(self):
         parent_var = RESOURCE_CATEGORIES[self.category]
         parent_dir = get_otol_build_env(parent_var)
@@ -235,9 +290,7 @@ class OpenTreeResource(object):
                 if os.path.exists(expected_path):
                     _LOG.warn('Path "%s" already exists. It will not be downloaded again...\n' % fp)
                 else:
-                    rc = subprocess.call(['svn', 'checkout', self.url, self.name])
-                    if rc != 0:
-                        raise RuntimeError('svn checkout of "%s" failed\n' % self.url)
+                    system_call(['svn', 'checkout', self.url, self.name])
                 self.path = expected_path
                 self.compressed_path = self.path
             else:
@@ -268,7 +321,18 @@ OpenTreeResource(name='ncl',
                  category='dependency',
                  compression='',
                  contact='mtholder',
-                 description='NEXUS class library (C++ library for parsing phylogenetic data)')
+                 description='NEXUS class library (C++ library for parsing phylogenetic data)',
+                 install_parent='${OPEN_TREE_INSTALL_DIR}',
+                 install_sub='lib/ncl',
+                 install_steps = [{'commands' : [['sh', 'bootstrap.sh']
+                                                ]},
+                                  {'wd' : 'build${OPEN_TREE_BUILD_TAG}',
+                                   'commands' : [['../configure', '--prefix=${OPEN_TREE_INSTALL_DIR}'],
+                                                 ['make'],
+                                                 ['make', 'install']
+                                                ]
+                                  },
+                                 ])
 
 
 
@@ -333,7 +397,7 @@ def get_resource_status_code(res_id, cfg_path, opts):
         resource.path = p
         resource.status = RESOURCE_STATUS_CODE.DOWNLOADED
     try:
-        p = cfg_interface.get(res_id.lower(), 'installpath')
+        p = cfg_interface.get(res_id.lower(), 'installed_path')
     except:
         p = None
     if p and os.path.exists(p):
@@ -343,6 +407,25 @@ def get_resource_status_code(res_id, cfg_path, opts):
         
     
     
+def status_command(res_id, cfg_path, opts):
+    '''Downloads and installs the resource with name `res_id` if it is not 
+    already installed.
+    '''
+    s = get_resource_status_code(res_id, cfg_path, opts)
+    resource = get_resource_obj(name=res_id)
+    if s == RESOURCE_STATUS_CODE.INSTALLED:
+        _LOG.info('"%s" is INSTALLED at "%s"' % (res_id, resource.installed_path))
+        return
+    if s == RESOURCE_STATUS_CODE.DOWNLOADED:
+        _LOG.info('"%s" is DOWNLOADED at "%s"\n' % (res_id, resource.path))
+        return
+    if s == RESOURCE_STATUS_CODE.MISSING:
+        _LOG.info('"%s" is MISSING\n' % (res_id))
+        return
+    if s == RESOURCE_STATUS_CODE.SKIPPED:
+        _LOG.info('"%s" is SKIPPED\n' % (res_id))
+        return
+    assert False
     
     
 def get_command(res_id, cfg_path, opts):
@@ -360,6 +443,27 @@ def get_command(res_id, cfg_path, opts):
     p = resource.do_download()
     cfg_interface = get_cfg_interface(cfg_path)
     cfg_interface.set(res_id.lower(), 'path', resource.path)
+    cfg_path_par = os.path.dirname(cfg_path)
+    if not os.path.exists(cfg_path_par):
+        os.makedirs(cfg_path_par)
+    with open(cfg_path, 'wb') as cfg_fileobj:
+        cfg_interface.write(cfg_fileobj)
+
+def install_command(res_id, cfg_path, opts):
+    '''Downloads and installs the resource with name `res_id` if it is not 
+    already installed.
+    '''
+    s = get_resource_status_code(res_id, cfg_path, opts)
+    resource = get_resource_obj(name=res_id)
+    if s == RESOURCE_STATUS_CODE.INSTALLED:
+        _LOG.info('Resource "%s" already installed at "%s"' % (res_id, resource.installed_path))
+        return
+    if s != RESOURCE_STATUS_CODE.DOWNLOADED:
+        get_command(res_id, cfg_path, opts)
+        
+    p = resource.do_install()
+    cfg_interface = get_cfg_interface(cfg_path)
+    cfg_interface.set(res_id.lower(), 'installed_path', resource.installed_path)
     cfg_path_par = os.path.dirname(cfg_path)
     if not os.path.exists(cfg_path_par):
         os.makedirs(cfg_path_par)
@@ -443,10 +547,11 @@ if __name__ == '__main__':
     
     
     description =  '%s %s %s' % (_program_name, _program_version, _program_subtitle)
-    command_width = len('status [resource]') + 1
+    command_width = len('install [resource]') + 1
     command_help = [('list', 'list available resources (no additional resource argument needed)'), 
                     ('status [resource]', 'show the status of the designated resource'),
                     ('get [resource]', 'download (and unpack) the designated resource'),
+                    ('install [resource]', 'install the designated resource'),
                     ]
     fmt_str = '%%%ds  %%s' % command_width
     command_list = '\n'.join([fmt_str % i for i in command_help])
@@ -468,19 +573,27 @@ if __name__ == '__main__':
         cfg_path = get_otol_build_env('OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG')
     _LOG.debug('Config path is %s\n' % cfg_path)
 
+    put_otol_build_env_into_env()
+
     command = args[0].lower()
     try:
         if command == 'list':
             list_command(opts)
         else:
             if len(args) < 2:
-                sys.exit('Expecting a resource identifier after the "%s" command.' % command)
-            for res_id in args[1:]:
+                if command == 'status':
+                    res_list = [i.name for i in get_flattened_resource_list()]
+                else:
+                    sys.exit('Expecting a resource identifier after the "%s" command.' % command)
+            else:
+                res_list = args[1:]
+            for res_id in res_list:
                 if command == 'status':
                     status_command(res_id, cfg_path, opts)
-                elif command == 'get' or command == 'install':
+                elif command == 'get':
                     get_command(res_id, cfg_path, opts)
-                    
+                elif command == 'install':
+                    install_command(res_id, cfg_path, opts)
                 else:
                     sys.exit('command "%s" not recognized. Use -h for help' % command)
     except Exception, e:
