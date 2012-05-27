@@ -16,7 +16,7 @@ import urllib
 import shutil
 import subprocess
 import zipfile
-from open_tree_env import get_otol_build_env, put_otol_build_env_into_env
+from open_tree_env import get_otol_build_env, put_otol_build_env_into_env, abbreviate_path
 
 _program_name = 'download-dev-resource'
 _program_subtitle = 'OpenTree developer download utility'
@@ -43,7 +43,29 @@ SUPPORTED_PROTOCOLS = ['http', 'svn']
 
 # global config file parser
 _CFG_PARSER = None
-
+_ACTION_LOG_FILE = None
+_LAST_LOGGED_DIR = None
+def _get_action_log_file():
+    global _ACTION_LOG_FILE
+    if _ACTION_LOG_FILE is None:
+        fp = os.path.join(get_otol_build_env('OPEN_TREE_DEPENDENCY_DIR'), 'log-bootstrap.txt')
+        _LOG.debug('Opening "%s" as action log' % fp)
+        fo = open(fp, 'a')
+        _ACTION_LOG_FILE = fo
+    return _ACTION_LOG_FILE
+        
+def log_action(message):
+    global _LAST_LOGGED_DIR
+    op = os.path.abspath(os.curdir)
+    action_log_file = _get_action_log_file()
+    if (_LAST_LOGGED_DIR is None) or (_LAST_LOGGED_DIR != op):
+        _LAST_LOGGED_DIR = op
+        abbrev = abbreviate_path(op)
+        action_log_file.write('cd "%s"\n' % abbrev)        
+    action_log_file.write(message + '\n')
+    action_log_file.flush()
+    _LOG.debug("ACTION: " + message)
+    
 
 ################################################################################
 # The following is from http://stackoverflow.com/questions/862173/how-to-download-a-file-using-python-in-a-smarter-way
@@ -70,11 +92,25 @@ def download_http(url, localFileName=None):
         # we can force to save the file as specified name
         localName = localFileName
     f = open(localName, 'wb')
-    _LOG.info('Downloading "%s" to "%s"...\n' % (localName, os.path.abspath(os.curdir)))
+    d = os.path.abspath(os.curdir)
+    _LOG.info('Downloading "%s" to "%s"...\n' % (localName, d))
     shutil.copyfileobj(r, f)
     f.close()
     r.close()
+    log_action('wget "%s"' % (url))
     return localName
+
+def _my_makedirs(dir):
+    '''Calls os.makedirs (if needed), and logs the action.'''
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+        log_action('mkdir -p "%s"' % os.path.abspath(dir))
+def _my_chdir(dir):
+    '''Calls os.chdir, and logs the action.'''
+    if not os.path.exists(dir):
+        _my_makedirs(dir)
+    os.chdir(dir)
+
 
 ############################
 # End code snippet from stackoverflow
@@ -94,9 +130,9 @@ def download_http(url, localFileName=None):
 class unzip:
         
     def extract(self, file, dir):
-        if not dir.endswith(':') and not os.path.exists(dir):
-            os.mkdir(dir)
-
+        if not dir.endswith(':'):
+            _my_makedirs(dir)
+    
         zf = zipfile.ZipFile(file)
 
         # create directory structure to house files
@@ -109,7 +145,7 @@ class unzip:
                 outfile.write(zf.read(name))
                 outfile.flush()
                 outfile.close()
-
+        log_action('unzip "%s"' % (file))
 
     def _createstructure(self, file, dir):
         self._makedirs(self._listdirs(file), dir)
@@ -119,8 +155,7 @@ class unzip:
         """ Create any directories that don't currently exist """
         for dir in directories:
             curdir = os.path.join(basedir, dir)
-            if not os.path.exists(curdir):
-                os.mkdir(curdir)
+            _my_makedirs(curdir)
 
     def _listdirs(self, file):
         """ Grabs all the directories in the zip structure
@@ -136,23 +171,46 @@ class unzip:
 
         dirs.sort()
         return dirs
+
 def unzip_file(file, dest_parent):
     u = unzip()
     u.extract(file, dest_parent)
 ## end of http://code.activestate.com/recipes/252508/ }}}
 
+def untar_gz(file, dest_parent):
+    system_call(['tar', 'xfvz', os.path.abspath(file)], wd=dest_parent)
+
 class RESOURCE_STATUS_CODE:
     SKIPPED, MISSING, DOWNLOADED, INSTALLED = range(4)
 
 
-def system_call(invoc):
-    rc = subprocess.call(invoc)
-    if rc != 0:
-        m = '" "'.join(invoc)
-        d = os.path.abspath(os.curdir)
-        message = 'The command:\n"%s"\nexecuted from %s failed with returncode %d\n' % (m, d, rc)
-        raise RuntimeError(message)
-
+def system_call(invoc, wd=None):
+    prev_dir = None
+    if wd is not None:
+        prev_dir = os.path.abspath(os.curdir)
+        wd = os.path.expandvars(wd)
+        _my_makedirs(wd)
+    else:
+        wd = os.curdir
+    try:
+        wl = []
+        for word in invoc:
+            if (len(word.split()) > 1) or (len(word.split('$')) > 1):
+                wl.append('"%s"' % word)
+            else:
+                wl.append(word)
+        m = ' '.join(wl)
+        d = os.path.abspath(wd)
+        _my_chdir(d)
+        log_action(m)
+        rc = subprocess.call(invoc)
+        if rc != 0:
+            message = 'The command:\n"%s"\nexecuted from %s failed with returncode %d\n' % (m, d, rc)
+            raise RuntimeError(message)
+    finally:
+        if prev_dir is not None:
+            _my_chdir(prev_dir)
+        
 class OpenTreeResource(object):
     '''A bundle of information about a resource. Attributes:
         `name` - name resource when downloaded and unpacked
@@ -170,7 +228,7 @@ class OpenTreeResource(object):
         `install_sub` a path to be joined to `install_parent` to verify that 
                 the install step worked.
     '''
-    UNPACKING_PROTOCOLS = ['', 'zip']
+    UNPACKING_PROTOCOLS = ['', 'zip', 'tar.gz']
     def __init__(self,
                  name,
                  url,
@@ -183,7 +241,8 @@ class OpenTreeResource(object):
                  description='',
                  install_steps=None,
                  install_parent='',
-                 install_sub=''):
+                 install_sub='',
+                 requires=None):
         self.name = name
         self.url = url
         self.protocol = protocol.lower()
@@ -200,8 +259,12 @@ class OpenTreeResource(object):
                 self.compressed_name = self.name
             elif self.compression == 'zip':
                 self.compressed_name = self.name + '.zip'
+            elif self.compression == 'tar.gz':
+                self.compressed_name = self.name + '.tar.gz'
+            else:
+                assert False
         else:
-            self.compressed_name = self.compressed_name
+            self.compressed_name = compressed_name
         self.contact = contact
         self.description = description
         self.path = None
@@ -210,13 +273,14 @@ class OpenTreeResource(object):
         self.install_steps = install_steps
         self.install_parent = install_parent
         self.install_sub = install_sub
+        self.requires = requires
         # here is the hack in which we add resource to the global list
         ALL_RESOURCES[self.category].append(self)
 
     def listing(self, opts):
         return '%s = %s' % (self.name, self.description)
 
-    def do_install(self):
+    def do_install(self, cfg_path, opts):
         if self.status < RESOURCE_STATUS_CODE.DOWNLOADED:
             self.do_download()
         if self.install_steps:
@@ -228,26 +292,23 @@ class OpenTreeResource(object):
             self.status = RESOURCE_STATUS_CODE.INSTALLED
             self.installed_path = final_path
             return
+        if self.requires:
+            for requirement in self.requires:
+                install_command(requirement, cfg_path, opts)
         cwd = os.path.abspath(os.getcwd())
         try:
             
             parent_var = os.path.expandvars(self.install_parent)
-            if not os.path.exists(parent_var):
-                os.makedirs(parent_var)
+            _my_makedirs(parent_var)
             download_parent = os.path.dirname(os.path.abspath(self.path))
-            os.chdir(self.path)
+            _my_chdir(self.path)
             for step_dict in self.install_steps:
                 wd = step_dict.get('wd')
-                if wd is not None:
-                    nwd = os.path.expandvars(wd)
-                    if not os.path.exists(nwd):
-                        os.makedirs(nwd)
-                    os.chdir(nwd)
                 cmd_list = step_dict.get('commands')
                 for cmd in cmd_list:
-                    system_call(cmd)
+                    system_call(cmd, wd)
         finally:
-            os.chdir(cwd)
+            _my_chdir(cwd)
         if not os.path.exists(final_path):
             raise RuntimeError('Installation steps completed, but installation products were not found at "%s"' % final_path)
         self.status = RESOURCE_STATUS_CODE.INSTALLED
@@ -257,13 +318,12 @@ class OpenTreeResource(object):
         parent_var = RESOURCE_CATEGORIES[self.category]
         parent_dir = get_otol_build_env(parent_var)
         assert parent_dir
-        if not os.path.exists(parent_dir):
-            os.makedirs(parent_dir)
+        _my_makedirs(parent_dir)
         cwd = os.path.abspath(os.getcwd())
         try:
             parent_dir = os.path.abspath(parent_dir)
             expected_path = os.path.join(parent_dir, self.compressed_name)
-            os.chdir(parent_dir)
+            _my_chdir(parent_dir)
             if self.protocol == 'http':
                 if os.path.exists(expected_path):
                     _LOG.warn('Path "%s" already exists. It will not be downloaded again...\n' % expected_path)
@@ -283,6 +343,10 @@ class OpenTreeResource(object):
                         _LOG.info('Unzipping "%s"...\n"' % fp)
                         unzip_file(fp, parent_dir)
                         fp = os.path.join(parent_dir, self.name)
+                    elif self.compression == 'tar.gz':
+                        _LOG.info('Unpacking "%s"...\n"' % fp)
+                        untar_gz(fp, parent_dir)
+                        fp = os.path.join(parent_dir, self.name)
                     _LOG.info('Obtained "%s"...\n"' % fp)
                 self.path = fp
                 return fp
@@ -298,7 +362,7 @@ class OpenTreeResource(object):
             self.status = RESOURCE_STATUS_CODE.DOWNLOADED
 
         finally:
-            os.chdir(cwd)
+            _my_chdir(cwd)
 
 
 
@@ -332,7 +396,59 @@ OpenTreeResource(name='ncl',
                                                  ['make', 'install']
                                                 ]
                                   },
+                                 ],
+                 requires = ['automake-1.11.5', 'libtool-2.4.2'])
+
+OpenTreeResource(name='autoconf-2.69', 
+                 url='http://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz',
+                 protocol='http',
+                 min_version=(2, 69, 0), # we probably could deal with an earlier automake
+                 category='dependency',
+                 compression='tar.gz',
+                 contact='mtholder',
+                 description='tool for creating cross-platform configue scripts',
+                 install_parent='${OPEN_TREE_BUILD_TOOL_PREFIX}',
+                 install_sub='bin/autoconf',
+                 install_steps = [{'commands' : [['./configure', '--prefix=${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['make'],
+                                                 ['make', 'install']
+                                                ]
+                                  },
                                  ])
+OpenTreeResource(name='automake-1.11.5', 
+                 url='http://ftp.gnu.org/gnu/automake/automake-1.11.5.tar.gz',
+                 protocol='http',
+                 min_version=(1, 11, 5), # we probably could deal with an earlier automake
+                 category='dependency',
+                 compression='tar.gz',
+                 contact='mtholder',
+                 description='tool for creating cross-platform Makefile',
+                 install_parent='${OPEN_TREE_BUILD_TOOL_PREFIX}',
+                 install_sub='bin/automake',
+                 install_steps = [{'commands' : [['./configure', '--prefix=${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['make'],
+                                                 ['make', 'install']
+                                                ]
+                                  },
+                                 ],
+                 requires = ['autoconf-2.69'])
+OpenTreeResource(name='libtool-2.4.2', 
+                 url='http://mirrors.kernel.org/gnu/libtool/libtool-2.4.2.tar.gz',
+                 protocol='http',
+                 min_version=(2, 4, 2), # we probably could deal with an earlier libtool
+                 category='dependency',
+                 compression='tar.gz',
+                 contact='mtholder',
+                 description='tool for creating cross-platform dynamic libraries',
+                 install_parent='${OPEN_TREE_BUILD_TOOL_PREFIX}',
+                 install_sub='bin/libtool',
+                 install_steps = [{'commands' : [['./configure', '--prefix=${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['make'],
+                                                 ['make', 'install']
+                                                ]
+                                  },
+                                 ],
+                 requires = ['automake-1.11.5'])
 
 
 
@@ -417,13 +533,13 @@ def status_command(res_id, cfg_path, opts):
         _LOG.info('"%s" is INSTALLED at "%s"' % (res_id, resource.installed_path))
         return
     if s == RESOURCE_STATUS_CODE.DOWNLOADED:
-        _LOG.info('"%s" is DOWNLOADED at "%s"\n' % (res_id, resource.path))
+        _LOG.info('"%s" is DOWNLOADED at "%s"' % (res_id, resource.path))
         return
     if s == RESOURCE_STATUS_CODE.MISSING:
-        _LOG.info('"%s" is MISSING\n' % (res_id))
+        _LOG.info('"%s" is MISSING' % (res_id))
         return
     if s == RESOURCE_STATUS_CODE.SKIPPED:
-        _LOG.info('"%s" is SKIPPED\n' % (res_id))
+        _LOG.info('"%s" is SKIPPED' % (res_id))
         return
     assert False
     
@@ -444,8 +560,7 @@ def get_command(res_id, cfg_path, opts):
     cfg_interface = get_cfg_interface(cfg_path)
     cfg_interface.set(res_id.lower(), 'path', resource.path)
     cfg_path_par = os.path.dirname(cfg_path)
-    if not os.path.exists(cfg_path_par):
-        os.makedirs(cfg_path_par)
+    _my_makedirs(cfg_path_par)
     with open(cfg_path, 'wb') as cfg_fileobj:
         cfg_interface.write(cfg_fileobj)
 
@@ -461,12 +576,11 @@ def install_command(res_id, cfg_path, opts):
     if s != RESOURCE_STATUS_CODE.DOWNLOADED:
         get_command(res_id, cfg_path, opts)
         
-    p = resource.do_install()
+    p = resource.do_install(cfg_path, opts)
     cfg_interface = get_cfg_interface(cfg_path)
     cfg_interface.set(res_id.lower(), 'installed_path', resource.installed_path)
     cfg_path_par = os.path.dirname(cfg_path)
-    if not os.path.exists(cfg_path_par):
-        os.makedirs(cfg_path_par)
+    _my_makedirs(cfg_path_par)
     with open(cfg_path, 'wb') as cfg_fileobj:
         cfg_interface.write(cfg_fileobj)
     
@@ -597,7 +711,11 @@ if __name__ == '__main__':
                 else:
                     sys.exit('command "%s" not recognized. Use -h for help' % command)
     except Exception, e:
-        sys.exit("Failing with an exception:\n    %s\n" % str(e))
+        if True:
+            raise
+        else:
+            sys.exit("Failing with an exception:\n    %s\n" % str(e))
+        
             
 
 ################################################################################

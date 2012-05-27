@@ -1,2 +1,11 @@
 *.pyc
 ncl
+log-bootstrap.txt
+autoconf-2.69.tar.gz
+autoconf-2.69
+automake-1.11.5.tar.gz
+automake-1.11.5
+libtool-2.4.2.tar.gz
+libtool-2.4.2
+tools
+
