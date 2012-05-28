@@ -32,12 +32,12 @@ resources.
 </tr>
 <tr>
     <td>OPEN_TREE_BIN_DIR</td>
-    <td>The location of installed Open Tree of Life executables</td>
+    <td>The location of installed Open Tree of Life executables (put on PATH to run)</td>
     <td><pre>${OPEN_TREE_INSTALL_DIR}/bin</pre></td>
 </tr>
 <tr>
     <td>OPEN_TREE_LIB_DIR</td>
-    <td>The location of installed Open Tree of Life libraries</td>
+    <td>The location of installed Open Tree of Life libraries (may need to be on load path at runtime)</td>
     <td><pre>${OPEN_TREE_INSTALL_DIR}/lib</pre></td>
 </tr>
 <tr>
@@ -56,6 +56,21 @@ resources.
     <td>The top level of the bootstrap-open-tree-software repository</td>
 </tr>
 <tr>
+    <td>OPEN_TREE_SOURCE_DIR</td>
+    <td>Parent directory into which Open Tree of Life git repos are checked out by default</td>
+    <td><pre>${OPEN_TREE_DEPENDENCY_DIR}/..</td>
+</tr>
+<tr>
+    <td>OPEN_TREE_BUILD_TOOL_PREFIX</td>
+    <td>Prefix argument given to build tools (resulting in bin, lib, ... subdirectories). Required for building, but not running. Make, gcc, javac, etc are condsidered to be prerequisites. This is intended for small and more obscure build tools (e.g. autoconf)</td>
+    <td><pre>${OPEN_TREE_DEPENDENCY_DIR}/tools</td>
+</tr>
+<tr>
+    <td>OPEN_TREE_BUILD_TOOL_BIN_DIR</td>
+    <td>Directory that should be on your PATH so you can find build tools</td>
+    <td><pre>${OPEN_TREE_BUILD_TOOL_PREFIX}/bin</td>
+</tr>
+<tr>
     <td>OPEN_TREE_DOWNLOAD_DEV_RESOURCE_CFG</td>
     <td>Config file that stores the location of local versions of the resources you have downloaded</td>
     <td><pre>${OPEN_TREE_USER_SETTINGS_DIR}/download-dev-resource.cfg</pre></td>
@@ -64,6 +79,11 @@ resources.
     <td>OPEN_TREE_BUILD_TAG</td>
     <td>A simple string (no spaces or shell token breakers) used to tag this build variant</td>
     <td><pre>release</pre></td>
+</tr>
+<tr>
+    <td>OPEN_TREE_VERSION</td>
+    <td>tag used in package install</td>
+    <td><pre>0.0.1</pre></td>
 </tr>
 </table>
 
