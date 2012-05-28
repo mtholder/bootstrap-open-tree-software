@@ -56,7 +56,8 @@ OpenTreeResource(name='autoconf-2.69',
                                                  ['make', 'install']
                                                 ]
                                   },
-                                 ])
+                                 ],
+                 requires=['m4-1.4.16'])
 OpenTreeResource(name='automake-1.11.5', 
                  url='http://ftp.gnu.org/gnu/automake/automake-1.11.5.tar.gz',
                  protocol='http',
@@ -91,6 +92,23 @@ OpenTreeResource(name='libtool-2.4.2',
                                   },
                                  ],
                  requires = ['automake-1.11.5'])
+
+OpenTreeResource(name='m4-1.4.16', 
+                 url='http://ftp.gnu.org/gnu/m4/m4-1.4.16.tar.gz',
+                 protocol='http',
+                 min_version=(1, 4, 16), # we probably could deal with an earlier libtool
+                 category='dependency',
+                 compression='tar.gz',
+                 contact='mtholder',
+                 description='m4 programming language',
+                 install_parent='${OPEN_TREE_BUILD_TOOL_PREFIX}',
+                 install_sub='bin/m4',
+                 install_steps = [{'commands' : [['./configure', '--prefix=${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['make'],
+                                                 ['make', 'install']
+                                                ]
+                                  },
+                                 ])
 
 
 
