@@ -8,6 +8,17 @@ Each software tool will be fairly self contained, but this repository should
 help with obtaining dependencies and keeping track of links to large artifacts
 (e.g. taxonomies) which are not currently under version control.
 
+Example Usage
+-------------
+<pre>
+./open_tree_env.py > open_tree_env.sh
+[tweak open_tree_env.sh for your preferences ]
+source open_tree_env.sh
+python download-dev-resource.py install taxa_allCoL.tre
+python download-dev-resource.py install ncl
+python download-dev-resource.py status
+</pre>
+
 
 Environmental Variables
 -----------------------
@@ -87,13 +98,3 @@ resources.
 </tr>
 </table>
 
-Example Usage
-=============
-<pre>
-./open_tree_env.py > open_tree_env.sh
-[tweak open_tree_env.sh for your preferences ]
-source open_tree_env.sh
-python download-dev-resource.py install taxa_allCoL.tre
-python download-dev-resource.py install ncl
-python download-dev-resource.py status
-</pre>
