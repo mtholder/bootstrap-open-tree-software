@@ -11,6 +11,7 @@ _build_env_var_list = ['OPEN_TREE_USER_SETTINGS_DIR',
                       'OPEN_TREE_LIB_DIR',
                       'OPEN_TREE_PKG_SHARE',
                       'OPEN_TREE_TAXONOMY_DIR',
+                      'OPEN_TREE_SOURCE_DIR',
                       'OPEN_TREE_DEPENDENCY_DIR',
                       'OPEN_TREE_BUILD_TOOL_PREFIX',
                       'OPEN_TREE_BUILD_TOOL_BIN_DIR',
@@ -44,6 +45,12 @@ def get_otol_build_env(var):
     if var == 'OPEN_TREE_TAXONOMY_DIR':
         share_dir = get_otol_build_env('OPEN_TREE_PKG_SHARE')
         return os.path.join(share_dir, 'taxonomy')
+    if var == 'OPEN_TREE_SOURCE_DIR':
+        d = os.path.abspath(get_otol_build_env('OPEN_TREE_DEPENDENCY_DIR'))
+        p = os.path.dirname(d)
+        if p:
+            return os.path.abspath(p)
+        return d
     if var == 'OPEN_TREE_DEPENDENCY_DIR':
         p = os.path.dirname(__file__)
         return os.path.abspath(p)
