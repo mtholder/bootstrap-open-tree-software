@@ -98,3 +98,19 @@ resources.
 </tr>
 </table>
 
+Default directory structure
+---------------------------
+<pre>
+$HOME/.open_tree           
+$HOME/open_tree_install    
+$HOME/open_tree_install/bin
+$HOME/open_tree_install/lib
+$HOME/open_tree_install/share/open-tree-$OPEN_TREE_VERSION   
+$HOME/open_tree_install/share/open-tree-$OPEN_TREE_VERSION/taxonomy
+$OPEN_TREE_SOURCE_DIR/bootstrap-open-tree-software
+$OPEN_TREE_SOURCE_DIR/bootstrap-open-tree-software/tools
+$OPEN_TREE_SOURCE_DIR/bootstrap-open-tree-software/tools/bin
+$OPEN_TREE_SOURCE_DIR/bootstrap-open-tree-software/tools/lib
+$OPEN_TREE_SOURCE_DIR/bootstrap-open-tree-software/tools/include
+</pre>
+    
