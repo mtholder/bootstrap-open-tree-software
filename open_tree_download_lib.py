@@ -409,7 +409,6 @@ def get_resource_status_code(res_id, cfg_path, opts):
         resource.status = RESOURCE_STATUS_CODE.DOWNLOADED
     try:
         p = cfg_interface.get(res_id.lower(), 'installed_path')
-        print p, res_id, cfg_interface
     except:
         p = None
     if p and os.path.exists(p):
