@@ -195,7 +195,7 @@ def system_call(invoc, wd=None):
         d = os.path.abspath(wd)
         _my_chdir(d)
         log_action(m)
-        rc = subprocess.call(invoc)
+        rc = subprocess.call(invoc, shell=True)
         if rc != 0:
             message = 'The command:\n"%s"\nexecuted from %s failed with returncode %d\n' % (m, d, rc)
             raise RuntimeError(message)
@@ -409,6 +409,7 @@ def get_resource_status_code(res_id, cfg_path, opts):
         resource.status = RESOURCE_STATUS_CODE.DOWNLOADED
     try:
         p = cfg_interface.get(res_id.lower(), 'installed_path')
+        print p, res_id, cfg_interface
     except:
         p = None
     if p and os.path.exists(p):

@@ -110,6 +110,26 @@ OpenTreeResource(name='m4-1.4.16',
                                   },
                                  ])
 
+OpenTreeResource(name='apache-maven-2.2.1',
+                 compressed_name='apache-maven-2.2.1-bin.tar.gz',
+                 url='http://mirrors.ibiblio.org/apache/maven/binaries/apache-maven-2.2.1-bin.tar.gz',
+                 protocol='http',
+                 min_version=(1, 4, 16), # we probably could deal with an earlier libtool
+                 category='dependency',
+                 compression='tar.gz',
+                 contact='mtholder',
+                 description='maven build tool',
+                 install_parent='${OPEN_TREE_BUILD_TOOL_PREFIX}',
+                 install_sub='bin/mvn',
+                 install_steps = [{'commands' : [['cp', '-r', 'conf', '${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['cp', 'lib/maven-2.2.1-uber.jar', '${OPEN_TREE_BUILD_TOOL_PREFIX}/lib'],
+                                                 ['cp', '-r', 'boot', '${OPEN_TREE_BUILD_TOOL_PREFIX}'],
+                                                 ['cp', 'bin/m2.conf', '${OPEN_TREE_BUILD_TOOL_PREFIX}/bin'],
+                                                 ['cp', 'bin/mvn.bat', '${OPEN_TREE_BUILD_TOOL_PREFIX}/bin'],
+                                                 ['cp', 'bin/mvnDebug', '${OPEN_TREE_BUILD_TOOL_PREFIX}/bin'],
+                                                 ['cp', 'bin/mvnDebug.bat', '${OPEN_TREE_BUILD_TOOL_PREFIX}/bin'],
+                                                 ['cp', 'bin/mvn', '${OPEN_TREE_BUILD_TOOL_PREFIX}/bin'],
+                                                 ]}])
 
 
 
